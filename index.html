@@ -22,7 +22,7 @@ const msg=(text,error=false)=>{ $('message').textContent=text; $('message').clas
 const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 function clearData(){generation++;token='';expires=0;tables=[];$('dashboard').hidden=true;$('welcome').hidden=false;$('body').replaceChildren();$('head').replaceChildren();$('modes').replaceChildren();$('states').replaceChildren();$('search').value='';$('refresh').disabled=true;$('logout').disabled=true;}
 function configure(){
- const id=localStorage.getItem('dashinfojobs-client-id')||'';
+ const id=localStorage.getItem('dashinfojobs-client-id')||'727693526591-hu7nus7qsut697l0e0d68doprfggfpq0.apps.googleusercontent.com';
  $('client').value=id;
  if(!window.google?.accounts?.oauth2){msg('Não foi possível carregar o Google. Verifique a conexão e recarregue.',true);return;}
  if(!id){$('setup').open=true;msg('Configure o ID OAuth para habilitar a entrada.');return;}
@@ -40,13 +40,13 @@ $('logout').onclick=()=>{const old=token;clearData();if(old)google.accounts.oaut
 async function load(){
  if(busy||!token)return;
  if(Date.now()>=expires-30000){clearData();msg('A autorização expirou. Entre novamente para atualizar.');return;}
- busy=true;const run=generation;const auth=token;$('refresh').disabled=true;msg('Consultando as três abas…');
+ busy=true;let run=generation;const auth=token;$('refresh').disabled=true;msg('Consultando as três abas…');
  try{
  const params=new URLSearchParams();NAMES.forEach(n=>params.append('ranges',"'"+n+"'!A1:J1000"));params.set('valueRenderOption','FORMATTED_VALUE');
  const response=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SHEET+'/values:batchGet?'+params,{headers:{Authorization:'Bearer '+auth},cache:'no-store'});
  const result=await response.json();if(run!==generation)return;
  if(!response.ok){
- if(response.status===401||response.status===403||response.status===404){clearData();}
+ if(response.status===401||response.status===403||response.status===404){clearData();run=generation;}
  throw new Error(response.status===403?'Acesso negado. Confirme a permissão da conta na planilha, a API habilitada e o consentimento OAuth.':response.status===401?'Autorização inválida. Entre novamente.':result.error?.message||'Falha ao consultar a planilha.');
  }
  if(!Array.isArray(result.valueRanges)||result.valueRanges.length!==3)throw new Error('Resposta incompleta da planilha.');
