@@ -1,77 +1,17 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><title>DashInfojobs Tech</title>
-<style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0b1120;color:#e8eef8}*{box-sizing:border-box}body{margin:0}header,main{max-width:1300px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:1px solid #24324a}h1{margin:0;font-size:26px}h2{font-size:18px}p{color:#a9b8cf}button,input,select{font:inherit;border:1px solid #33445e;border-radius:9px;padding:11px;background:#172338;color:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}.primary{background:#2765df;border-color:#2765df}.panel{background:#111c2e;border:1px solid #24324a;border-radius:14px;padding:20px;margin-bottom:20px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.card{background:#111c2e;border:1px solid #24324a;border-radius:14px;padding:20px}.number{display:block;font-size:32px;margin-top:8px}.filters,.tabs,.actions{display:flex;gap:10px;flex-wrap:wrap}.filters input{flex:1;min-width:200px}.tabs{margin-bottom:20px}.active{background:#2765df}.charts{display:grid;grid-template-columns:1fr 1fr;gap:20px}.bar{display:grid;grid-template-columns:140px 1fr 35px;gap:12px;align-items:center;margin:14px 0;font-size:14px}.track{height:9px;background:#24324a;border-radius:5px;overflow:hidden}.fill{height:100%;background:#59a3ff}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:13px;text-align:left;border-bottom:1px solid #24324a;vertical-align:top}th{color:#a9b8cf}td{min-width:100px}a{color:#81b8ff}.status{min-height:24px;color:#a9b8cf;white-space:pre-wrap}.error{color:#ffaaaa}small{color:#a9b8cf}details input{width:min(100%,640px)}[hidden]{display:none!important}@media(max-width:700px){header{display:block}.actions{margin-top:15px}.cards{grid-template-columns:1fr 1fr}.charts{grid-template-columns:1fr}header,main{padding:16px}.bar{grid-template-columns:110px 1fr 30px}}
-</style></head><body>
-<header><div><small>ARAY SOLUÇÕES · CONTROLE DE OPORTUNIDADES</small><h1>DashInfojobs Tech</h1></div><div class="actions"><button id="login" class="primary" disabled>Entrar com Google</button><button id="refresh" disabled>Atualizar</button><button id="logout" disabled>Sair</button></div></header>
-<main><section class="panel" id="welcome"><h2>Suas oportunidades, em um só lugar</h2><p>Autorize a leitura da planilha com sua conta Google. Os dados só aparecem para contas que possuem acesso ao arquivo.</p><details id="setup"><summary>Configurar conexão Google</summary><p>Insira o ID do cliente OAuth de aplicação Web. Ele é um identificador público, não uma senha.</p><input id="client" placeholder="…apps.googleusercontent.com" aria-label="ID do cliente OAuth"><button id="save">Salvar configuração</button><p>Ative a API Google Sheets e autorize a origem HTTPS do seu GitHub Pages no Google Cloud.</p></details></section>
-<p id="message" class="status" role="status" aria-live="polite">Carregando autenticação Google…</p>
-<div id="dashboard" hidden><div class="cards"><div class="card">Vagas InfoJobs<strong class="number" id="count0">0</strong></div><div class="card">Vagas<strong class="number" id="count1">0</strong></div><div class="card">Candidaturas<strong class="number" id="count2">0</strong></div><div class="card">Registros no filtro<strong class="number" id="filtered">0</strong></div></div>
-<nav class="tabs" aria-label="Abas da planilha"><button data-tab="0" class="active">Vagas InfoJobs</button><button data-tab="1">Vagas</button><button data-tab="2">Candidaturas</button></nav>
-<section class="panel"><div class="filters"><input id="search" type="search" placeholder="Buscar vaga, empresa ou local…" aria-label="Pesquisar"><select id="mode" aria-label="Modalidade"></select><select id="state" aria-label="Status"></select></div></section>
-<div class="charts"><section class="panel"><h2 id="chart-title">Modalidades</h2><div id="modes"></div></section><section class="panel"><h2>Status dos registros</h2><div id="states"></div></section></div>
-<section class="panel"><h2 id="table-title">Vagas InfoJobs</h2><small id="updated"></small><div class="table-wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div><div class="actions" style="margin-top:15px"><button id="prev">Anterior</button><span id="page"></span><button id="next">Próxima</button></div></section></div>
-<small>A planilha é a fonte dos dados. Indicadores de cada aba são independentes e podem conter oportunidades repetidas entre abas.</small></main>
-<script>
-'use strict';
-const SHEET='1J1gx42_VH4NL8u7pye5t6gwcacSl3ITF0QeOA9L3WkE';
-const NAMES=['Vagas InfoJobs','Vagas','Candidaturas'];
-const $=id=>document.getElementById(id);
-let token='',expires=0,oauth=null,tables=[],tab=0,page=0,busy=false,generation=0;
-const msg=(text,error=false)=>{ $('message').textContent=text; $('message').classList.toggle('error',error); };
-const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-function clearData(){generation++;token='';expires=0;tables=[];$('dashboard').hidden=true;$('welcome').hidden=false;$('body').replaceChildren();$('head').replaceChildren();$('modes').replaceChildren();$('states').replaceChildren();$('search').value='';$('refresh').disabled=true;$('logout').disabled=true;}
-function configure(){
- const id=localStorage.getItem('dashinfojobs-client-id')||'727693526591-hu7nus7qsut697l0e0d68doprfggfpq0.apps.googleusercontent.com';
- $('client').value=id;
- if(!window.google?.accounts?.oauth2){msg('Não foi possível carregar o Google. Verifique a conexão e recarregue.',true);return;}
- if(!id){$('setup').open=true;msg('Configure o ID OAuth para habilitar a entrada.');return;}
- oauth=google.accounts.oauth2.initTokenClient({client_id:id,scope:'https://www.googleapis.com/auth/spreadsheets.readonly',callback:async result=>{
- if(result.error){clearData();msg('Autorização não concluída: '+result.error,true);return;}
- token=result.access_token;expires=Date.now()+Number(result.expires_in||3600)*1000;
- $('logout').disabled=false;await load();
- },error_callback:()=>msg('A janela de autorização foi fechada ou bloqueada. Tente novamente.',true)});
- $('login').disabled=false;msg('Entre com a conta Google que tem acesso à planilha.');
-}
-window.googleReady=configure;
-$('save').onclick=()=>{const id=$('client').value.trim();if(!/^[a-zA-Z0-9._-]+\.apps\.googleusercontent\.com$/.test(id)){msg('Informe um ID OAuth válido.',true);return;}clearData();localStorage.setItem('dashinfojobs-client-id',id);configure();};
-$('login').onclick=()=>{clearData();oauth.requestAccessToken({prompt:'select_account'});};
-$('logout').onclick=()=>{const old=token;clearData();if(old)google.accounts.oauth2.revoke(old,()=>{});msg('Você saiu. Os dados foram removidos desta página.');};
-async function load(){
- if(busy||!token)return;
- if(Date.now()>=expires-30000){clearData();msg('A autorização expirou. Entre novamente para atualizar.');return;}
- busy=true;let run=generation;const auth=token;$('refresh').disabled=true;msg('Consultando as três abas…');
- try{
- const params=new URLSearchParams();NAMES.forEach(n=>params.append('ranges',"'"+n+"'!A1:J1000"));params.set('valueRenderOption','FORMATTED_VALUE');
- const response=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SHEET+'/values:batchGet?'+params,{headers:{Authorization:'Bearer '+auth},cache:'no-store'});
- const result=await response.json();if(run!==generation)return;
- if(!response.ok){
- if(response.status===401||response.status===403||response.status===404){clearData();run=generation;}
- throw new Error(response.status===403?'Acesso negado. Confirme a permissão da conta na planilha, a API habilitada e o consentimento OAuth.':response.status===401?'Autorização inválida. Entre novamente.':result.error?.message||'Falha ao consultar a planilha.');
- }
- if(!Array.isArray(result.valueRanges)||result.valueRanges.length!==3)throw new Error('Resposta incompleta da planilha.');
- tables=result.valueRanges.map(r=>{const v=r.values||[];return {headers:v[0]||[],rows:v.slice(1).filter(row=>row.some(c=>String(c).trim()))};});
- $('dashboard').hidden=false;$('welcome').hidden=true;tables.forEach((t,i)=>$('count'+i).textContent=t.rows.length);
- $('updated').textContent='Última consulta: '+new Date().toLocaleString('pt-BR')+' · atualização automática a cada 60 s';
- options();render();msg('Dados atualizados.');
- }catch(error){if(run===generation)msg(error.message+(tables.length?' Os dados exibidos são da última consulta bem-sucedida.':''),true);}
- finally{busy=false;$('refresh').disabled=!token;}
-}
-$('refresh').onclick=load;
-function selectOptions(id,label,values){const element=$(id),previous=element.value;element.replaceChildren();[ ['',label],...Array.from(new Set(values.filter(Boolean))).sort().map(x=>[x,x])].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;element.append(o);});if(Array.from(element.options).some(o=>o.value===previous))element.value=previous;}
-function options(){const rows=tables[tab].rows;selectOptions('mode',tab===2?'Todos os estágios':'Todas as modalidades',rows.map(r=>r[tab===2?3:4]||''));selectOptions('state','Todos os status',rows.map(r=>r[tab===2?4:9]||''));}
-function bars(id,rows,index){const counts=new Map();rows.forEach(r=>{const key=r[index]||'Não informado';counts.set(key,(counts.get(key)||0)+1);});const el=$(id);el.replaceChildren();if(!rows.length){el.textContent='Nenhum registro neste filtro.';return;}const max=Math.max(...counts.values());Array.from(counts).sort((a,b)=>b[1]-a[1]).forEach(([name,count])=>{const row=document.createElement('div');row.className='bar';const label=document.createElement('span');label.textContent=name;const track=document.createElement('div');track.className='track';const fill=document.createElement('div');fill.className='fill';fill.style.width=(count/max*100)+'%';track.append(fill);const number=document.createElement('span');number.textContent=count;row.append(label,track,number);el.append(row);});}
-function render(){
- if(!tables[tab])return;const table=tables[tab];const query=normalize($('search').value);const rows=table.rows.filter(r=>(!query||normalize(r.join(' ')).includes(query))&&(!$('mode').value||r[tab===2?3:4]===$('mode').value)&&(!$('state').value||r[tab===2?4:9]===$('state').value));
- $('filtered').textContent=rows.length;$('chart-title').textContent=tab===2?'Estágio dos processos':'Modalidades';bars('modes',rows,tab===2?3:4);bars('states',rows,tab===2?4:9);
- $('table-title').textContent=NAMES[tab];$('head').replaceChildren();const tr=document.createElement('tr');table.headers.forEach(h=>{const th=document.createElement('th');th.textContent=h;tr.append(th);});$('head').append(tr);
- const pages=Math.max(1,Math.ceil(rows.length/20));page=Math.min(page,pages-1);$('body').replaceChildren();
- rows.slice(page*20,(page+1)*20).forEach(row=>{const tr=document.createElement('tr');table.headers.forEach((h,i)=>{const td=document.createElement('td');const value=String(row[i]||'');if(h==='Link InfoJobs'){try{const url=new URL(value);if(url.protocol==='https:'&&(url.hostname==='infojobs.com.br'||url.hostname.endsWith('.infojobs.com.br'))){const a=document.createElement('a');a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent='Abrir vaga ↗';td.append(a);}else td.textContent=value;}catch{td.textContent=value;}}else td.textContent=value;tr.append(td);});$('body').append(tr);});
- if(!rows.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=Math.max(1,table.headers.length);td.textContent='Nenhum registro encontrado.';tr.append(td);$('body').append(tr);}
- $('page').textContent='Página '+(page+1)+' de '+pages;$('prev').disabled=page===0;$('next').disabled=page>=pages-1;
-}
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=Number(b.dataset.tab);page=0;$('mode').value='';$('state').value='';document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));options();render();});
-['search','mode','state'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',()=>{page=0;render();}));
-$('prev').onclick=()=>{page--;render();};$('next').onclick=()=>{page++;render();};
-setInterval(()=>{if(!document.hidden)load();},60000);
-</script><script src="https://accounts.google.com/gsi/client" async onload="googleReady()" onerror="document.getElementById('message').textContent='Falha ao carregar autenticação Google. Recarregue a página.'"></script></body></html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="description" content="Seu radar de oportunidades: vagas e candidaturas organizadas, com acesso privado pelo Google.">
+<meta name="theme-color" content="#0d111a">
+<title>DashInfojobs Tech · Aray Soluções</title>
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+<link rel="stylesheet" href="./assets/css/dashboard.css?v=2">
+<script defer src="./assets/js/config.js?v=2"></script>
+<script defer src="./assets/js/data.js?v=2"></script>
+<script defer src="./assets/js/app.js?v=2"></script>
+<script defer src="./assets/js/auth.js?v=2"></script>
+</head>
+<body><a class="skip-link" href="#main">Ir para o conteúdo</a><div id="app"></div><noscript>Ative o JavaScript para acessar o dashboard.</noscript></body>
+</html>
